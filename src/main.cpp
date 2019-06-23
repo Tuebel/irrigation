@@ -31,9 +31,10 @@ void setup_connection() {
   mqtt_client.setServer(mqtt_server, mqtt_port);
 }
 
-void relay_switch_callback(char* data, uint16_t len) {
+void relay_callback(char* data) {
   // handle message arrived
-  Serial.print(data);
+  Serial.print("received command ");
+  Serial.println(data);
 }
 
 void setup() {
@@ -63,6 +64,7 @@ void setup() {
     Serial.println("connecting moisture to home-assistant in 5 seconds");
     delay(5000);
   }
+  relay.subscribeCommands(relay_callback);
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(A0, INPUT);
   pinMode(relayPin, OUTPUT);

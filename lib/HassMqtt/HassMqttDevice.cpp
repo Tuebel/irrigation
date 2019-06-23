@@ -52,6 +52,17 @@ bool HassMqttDevice::stateTopic(char* state_topic) {
 
 void HassMqttDevice::msg_callback(char* topic, byte* payload,
                                   unsigned int length) {
+  // convert to null terminated string
+  char msg[length + 1];
+  msg[0] = '\0';
+  strncat(msg, (const char*)payload, length);
+  // debug log
+  Serial.print("reveived msg: ");
+  Serial.print(msg);
+  Serial.print(" on topic: ");
+  Serial.print(topic);
+  Serial.print(" with length ");
+  Serial.println(length);
   char cmd_topic[max_topic_size];
   if (!commandTopic(cmd_topic)) {
     Serial.print("failed to call command callback: ");
@@ -59,7 +70,12 @@ void HassMqttDevice::msg_callback(char* topic, byte* payload,
     return;
   }
   if (strcmp(topic, cmd_topic) == 0) {
-    cmd_callback((char*)payload);
+    if (cmd_callback) {
+      cmd_callback(msg);
+    } else {
+      Serial.print("failed to call command callback: ");
+      Serial.println("no cmd_callback configured");
+    }
   }
 }
 
@@ -121,7 +137,6 @@ bool HassMqttDevice::connect(PubSubClient& client, const char* username,
     return false;
   }
   // publish via stream as the json gets large
-  size_t config_length = measureJson(doc);
   Serial.print("publish config: ");
   serializeJson(doc, Serial);
   Serial.print(" to topic ");
@@ -195,7 +210,7 @@ bool HassMqttDevice::subscribeCommands(CommandCallback callback) {
     Serial.print("failed to subsrcibe the command topic:");
     Serial.println("either connection lost, or message too large");
   }
-  Serial.print("subscribed command topic");
+  Serial.println("subscribed command topic");
   cmd_callback = callback;
   return true;
 }
