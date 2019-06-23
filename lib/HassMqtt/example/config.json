@@ -1,0 +1,5 @@
+{
+  "name": "Pumpe",
+  "state_t": "homeassistant/switch/irrigation/pump/stat",
+  "cmd_t": "homeassistant/switch/irrigation/pump/cmd"
+}
