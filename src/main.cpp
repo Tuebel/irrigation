@@ -2,15 +2,71 @@
 #include <ESP8266WiFi.h>
 #include <HassMqttDevice.h>
 #include <PubSubClient.h>
+#include <TaskScheduler.h>
 #include "device_config.h"
 
 // hardware access
-unsigned long previous_millis = 0;
-const long interval = 1000;
-const int relayPin = D1;
+const int RELAY_PIN = D1;
+const int MOISTURE_POWER_PIN = D2;
+const int ADC_PIN = A0;
+// connection to home-assistant
 WiFiClient wifi_client;
 PubSubClient mqtt_client;
 HassMqttDevice moisture, relay;
+// task scheduling
+Scheduler scheduler;
+void blink();
+Task blink_task(1e3, TASK_FOREVER, &blink, &scheduler);
+void deep_sleep();
+// run once, restart delayed in setup
+Task deep_sleep_task(0, 1, &deep_sleep, &scheduler);
+void loop_mqtt();
+Task loop_mqtt_task(100, TASK_FOREVER, &loop_mqtt, &scheduler);
+void moisture_power_on();
+void moisture_measure();
+Task moisture_task(1e3, TASK_FOREVER, &moisture_power_on, &scheduler);
+void relay_off();
+// run once, restart delayed after every relay on
+Task relay_off_task(1e3, 1, &relay_off, &scheduler);
+
+void blink() { digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN)); }
+
+void deep_sleep() {
+  Serial.println("Enter deep sleep");
+  ESP.deepSleep(600e6);
+}
+
+void loop_mqtt() { mqtt_client.loop(); }
+
+void moisture_power_on() {
+  digitalWrite(MOISTURE_POWER_PIN, HIGH);
+  // measurement in 1sec
+  moisture_task.setCallback(&moisture_measure);
+  moisture_task.setInterval(1e3);
+}
+void moisture_measure() {
+  double moisture_volt = 3.3 * analogRead(ADC_PIN) / 1024;
+  char moisture_payload[4];
+  dtostrf(moisture_volt, 3, 2, moisture_payload);
+  moisture.publishState(moisture_payload);
+  digitalWrite(MOISTURE_POWER_PIN, LOW);
+  // restart measurement in 10secs
+  moisture_task.setCallback(&moisture_power_on);
+  moisture_task.setInterval(10e3);
+}
+
+void relay_off() {
+  digitalWrite(RELAY_PIN, LOW);
+  relay.publishState("OFF");
+  loop_mqtt();
+}
+
+void relay_on() {
+  digitalWrite(RELAY_PIN, HIGH);
+  relay.publishState("ON");
+  // for safety auto turn off after delay
+  relay_off_task.restartDelayed(2000);
+}
 
 void setup_connection() {
   // Connect WiFi
@@ -31,10 +87,16 @@ void setup_connection() {
   mqtt_client.setServer(mqtt_server, mqtt_port);
 }
 
-void relay_callback(char* data) {
+void relay_callback(char* msg) {
   // handle message arrived
-  Serial.print("received command ");
-  Serial.println(data);
+  Serial.print("relay received command ");
+  Serial.println(msg);
+  if (strcmp(msg, "ON") == 0) {
+    relay_on();
+  } else {
+    // LOW is safe
+    relay_off();
+  }
 }
 
 void setup() {
@@ -54,6 +116,11 @@ void setup() {
   relay.setName("Pumpschalter");
   relay.setNodeId("esp8266_christmas_star");
   relay.setObjectId("relay_christmas_star");
+  // config pins
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(ADC_PIN, INPUT);
+  pinMode(MOISTURE_POWER_PIN, OUTPUT);
+  pinMode(RELAY_PIN, OUTPUT);
   // connect
   setup_connection();
   while (!moisture.connect(mqtt_client, mqtt_user, mqtt_password)) {
@@ -65,28 +132,16 @@ void setup() {
     delay(5000);
   }
   relay.subscribeCommands(relay_callback);
-  pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(A0, INPUT);
-  pinMode(relayPin, OUTPUT);
+  // run tasks
+  blink_task.enable();
+  // deep sleep in 30s
+  deep_sleep_task.restartDelayed(15e3);
+  loop_mqtt_task.enable();
+  moisture_task.enable();
   Serial.println("Device ready");
 }
 
-double voltage33(int value) { return value * 3.3 / 1024; }
-
 void loop() {
-  mqtt_client.loop();
-  // toggle internal LED
-  digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-  // read the moisture voltage
-  double moisture_volt = voltage33(analogRead(A0));
-  char moisture_payload[4];
-  dtostrf(moisture_volt, 3, 2, moisture_payload);
-  moisture.publishState(moisture_payload);
-  delay(1000);
-  // // turn on relay with high
-  // digitalWrite(relayPin, HIGH);
-  // delay(1000);
-  // digitalWrite(LED_BUILTIN, HIGH);
-  // digitalWrite(relayPin, LOW);
-  // delay(2000);
+  // leave flow control to the scheduler
+  scheduler.execute();
 }

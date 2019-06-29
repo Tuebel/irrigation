@@ -18,35 +18,30 @@ bool strcat_safe(char* dest, const char* src, int dest_size) {
 bool HassMqttDevice::baseTopic(char* base_topic) {
   strcpy(base_topic, discovery_prefix);
   bool valid = true;
-  valid &= strcat_safe(base_topic, "/", max_topic_size);
-  valid &= strcat_safe(base_topic, component, max_topic_size);
-  valid &= strcat_safe(base_topic, "/", max_topic_size);
-  valid &= strcat_safe(base_topic, node_id, max_topic_size);
-  valid &= strcat_safe(base_topic, "/", max_topic_size);
-  valid &= strcat_safe(base_topic, object_id, max_topic_size);
+  valid &= strcat_safe(base_topic, "/", MAX_TOPIC_SIZE);
+  valid &= strcat_safe(base_topic, component, MAX_TOPIC_SIZE);
+  valid &= strcat_safe(base_topic, "/", MAX_TOPIC_SIZE);
+  valid &= strcat_safe(base_topic, node_id, MAX_TOPIC_SIZE);
+  valid &= strcat_safe(base_topic, "/", MAX_TOPIC_SIZE);
+  valid &= strcat_safe(base_topic, object_id, MAX_TOPIC_SIZE);
   return valid;
 }
 bool HassMqttDevice::configTopic(char* config_topic) {
   bool valid = true;
   valid &= baseTopic(config_topic);
-  valid &= strcat_safe(config_topic, "/config", max_topic_size);
+  valid &= strcat_safe(config_topic, "/config", MAX_TOPIC_SIZE);
   return valid;
 }
 bool HassMqttDevice::commandTopic(char* command_topic) {
-  if (is_commandable) {
-    bool valid = true;
-    valid &= baseTopic(command_topic);
-    valid &= strcat_safe(command_topic, "/cmd", max_topic_size);
-    return valid;
-  } else {
-    strcpy(command_topic, "");
-    return true;
-  }
+  bool valid = true;
+  valid &= baseTopic(command_topic);
+  valid &= strcat_safe(command_topic, "/cmd", MAX_TOPIC_SIZE);
+  return valid;
 }
 bool HassMqttDevice::stateTopic(char* state_topic) {
   bool valid = true;
   valid &= baseTopic(state_topic);
-  valid &= strcat_safe(state_topic, "/stat", max_topic_size);
+  valid &= strcat_safe(state_topic, "/stat", MAX_TOPIC_SIZE);
   return valid;
 }
 
@@ -59,11 +54,9 @@ void HassMqttDevice::msg_callback(char* topic, byte* payload,
   // debug log
   Serial.print("reveived msg: ");
   Serial.print(msg);
-  Serial.print(" on topic: ");
-  Serial.print(topic);
-  Serial.print(" with length ");
-  Serial.println(length);
-  char cmd_topic[max_topic_size];
+  Serial.print(" topic: ");
+  Serial.println(topic);
+  char cmd_topic[MAX_TOPIC_SIZE];
   if (!commandTopic(cmd_topic)) {
     Serial.print("failed to call command callback: ");
     Serial.println("command topic too long");
@@ -83,11 +76,11 @@ bool HassMqttDevice::reconnect() {
   if (client->connected()) {
     return true;
   }
-  char client_id[max_node_id_size + max_object_id_size + 2];
+  char client_id[MAX_NODE_ID_SIZE + MAX_OBJECT_ID_SIZE + 2];
   strcpy(client_id, node_id);
   strcat(client_id, "/");
   strcat(client_id, object_id);
-  for (int i = 0; i < max_reconnect_tries; i++) {
+  for (int i = 0; i < MAX_RECONNECT_TRIES; i++) {
     if (!client->connect(client_id, username, password)) {
       Serial.print("failed to connect mqtt, rc=");
       Serial.print(client->state());
@@ -117,10 +110,13 @@ bool HassMqttDevice::connect(PubSubClient& client, const char* username,
   DynamicJsonDocument doc(capacity);
   bool valid = true;
   doc["name"] = name;
-  char cmd_topic[max_topic_size];
-  valid &= commandTopic(cmd_topic);
-  doc["cmd_t"] = (const char*)cmd_topic;
-  char stat_topic[max_topic_size];
+  // keep in scope
+  char cmd_topic[MAX_TOPIC_SIZE];
+  if (is_commandable) {
+    valid &= commandTopic(cmd_topic);
+    doc["cmd_t"] = (const char*)cmd_topic;
+  }
+  char stat_topic[MAX_TOPIC_SIZE];
   valid &= stateTopic(stat_topic);
   doc["stat_t"] = (const char*)stat_topic;
   if (!valid) {
@@ -129,7 +125,7 @@ bool HassMqttDevice::connect(PubSubClient& client, const char* username,
     return false;
   }
   // publish to config topic
-  char config_topic[max_topic_size];
+  char config_topic[MAX_TOPIC_SIZE];
   valid &= configTopic(config_topic);
   if (!valid) {
     Serial.print("could not connect to home-assistant: ");
@@ -153,7 +149,7 @@ bool HassMqttDevice::connect(PubSubClient& client, const char* username,
 }
 
 void HassMqttDevice::remove() {
-  char config_topic[max_topic_size];
+  char config_topic[MAX_TOPIC_SIZE];
   if (!configTopic(config_topic)) {
     Serial.print("could not unregister device: ");
     Serial.println("config topic is not valid (max. 150chars)");
@@ -174,7 +170,7 @@ bool HassMqttDevice::publishState(const char* state) {
     Serial.println("MQTT client not connected");
     return false;
   }
-  char state_topic[max_topic_size];
+  char state_topic[MAX_TOPIC_SIZE];
   if (!stateTopic(state_topic)) {
     Serial.println("failed to publish state: ");
     Serial.print("state topic is too long");
@@ -200,7 +196,7 @@ bool HassMqttDevice::subscribeCommands(CommandCallback callback) {
   client->setCallback(std::bind(&HassMqttDevice::msg_callback, this,
                                 std::placeholders::_1, std::placeholders::_2,
                                 std::placeholders::_3));
-  char cmd_topic[max_topic_size];
+  char cmd_topic[MAX_TOPIC_SIZE];
   if (!commandTopic(cmd_topic)) {
     Serial.print("failed to subsrcibe the command topic: ");
     Serial.println("command topic too long");
@@ -216,7 +212,7 @@ bool HassMqttDevice::subscribeCommands(CommandCallback callback) {
 }
 
 void HassMqttDevice::setComponent(const char* component) {
-  strncpy(this->component, component, max_component_size);
+  strncpy(this->component, component, MAX_COMPONENT_SIZE);
 }
 
 void HassMqttDevice::setIsCommandable(bool is_commandable) {
@@ -224,13 +220,13 @@ void HassMqttDevice::setIsCommandable(bool is_commandable) {
 }
 
 void HassMqttDevice::setName(const char* name) {
-  strncpy(this->name, name, max_name_size);
+  strncpy(this->name, name, MAX_NAME_SIZE);
 }
 
 void HassMqttDevice::setNodeId(const char* node_id) {
-  strncpy(this->node_id, node_id, max_node_id_size);
+  strncpy(this->node_id, node_id, MAX_NODE_ID_SIZE);
 }
 
 void HassMqttDevice::setObjectId(const char* object_id) {
-  strncpy(this->object_id, object_id, max_object_id_size);
+  strncpy(this->object_id, object_id, MAX_OBJECT_ID_SIZE);
 }

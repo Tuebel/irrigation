@@ -5,10 +5,10 @@
 
 class HassMqttDevice {
  public:
-  const static int max_topic_size = 150, max_name_size = 50,
-                   max_node_id_size = 50, max_object_id_size = 50,
-                   max_component_size = 30, max_reconnect_tries = 5,
-                   max_username_size = 50, max_password_size = 50;
+  const static int MAX_TOPIC_SIZE = 150, MAX_NAME_SIZE = 50,
+                   MAX_NODE_ID_SIZE = 50, MAX_OBJECT_ID_SIZE = 50,
+                   MAX_COMPONENT_SIZE = 30, MAX_RECONNECT_TRIES = 5,
+                   MAX_USERNAME_SIZE = 50, MAX_PASSWORD_SIZE = 50;
   // callback for commands, has a char* payload
   using CommandCallback = std::function<void(char*)>;
 
@@ -16,18 +16,18 @@ class HassMqttDevice {
   // mqtt communication with home-assistant
   PubSubClient* client;
   CommandCallback cmd_callback;
-  char username[max_username_size];
-  char password[max_password_size];
+  char username[MAX_USERNAME_SIZE];
+  char password[MAX_PASSWORD_SIZE];
   // e.g. binary_sensor
-  char component[max_component_size];
+  char component[MAX_COMPONENT_SIZE];
   // e.g. a switch is commandable, a sensor not
   bool is_commandable;
   // display name
-  char name[max_name_size];
+  char name[MAX_NAME_SIZE];
   // e.g. esp8266_livingroom
-  char node_id[max_node_id_size];
+  char node_id[MAX_NODE_ID_SIZE];
   // e.g. light_switch
-  char object_id[max_object_id_size];
+  char object_id[MAX_OBJECT_ID_SIZE];
 
   // creates the base topic, returns false, if the max_topic_id is exceeded
   bool baseTopic(char* base_topic);
