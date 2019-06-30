@@ -15,6 +15,13 @@ bool strcat_safe(char* dest, const char* src, int dest_size) {
   }
 }
 
+bool HassMqttDevice::availabilityTopic(char* availability_topic) {
+  bool valid = true;
+  valid &= baseTopic(availability_topic);
+  valid &= strcat_safe(availability_topic, "/available", MAX_TOPIC_SIZE);
+  return valid;
+}
+
 bool HassMqttDevice::baseTopic(char* base_topic) {
   strcpy(base_topic, discovery_prefix);
   bool valid = true;
@@ -76,7 +83,7 @@ bool HassMqttDevice::reconnect() {
   if (client->connected()) {
     return true;
   }
-  char client_id[MAX_NODE_ID_SIZE + MAX_OBJECT_ID_SIZE + 2];
+  char client_id[MAX_CONFIG_VARIABLE_SIZE + MAX_CONFIG_VARIABLE_SIZE + 2];
   strcpy(client_id, node_id);
   strcat(client_id, "/");
   strcat(client_id, object_id);
@@ -106,11 +113,22 @@ bool HassMqttDevice::connect(PubSubClient& client, const char* username,
     return false;
   }
   // config payload
-  const size_t capacity = JSON_OBJECT_SIZE(5);
+  const size_t capacity = JSON_OBJECT_SIZE(6);
   DynamicJsonDocument doc(capacity);
   bool valid = true;
-  doc["name"] = name;
-  // keep in scope
+  if (strlen(icon) > 0) {
+    doc["icon"] = (const char*)icon;
+  }
+  if (strlen(name) > 0) {
+    doc["name"] = (const char*)name;
+  }
+  if (strlen(unit_of_measurement) > 0) {
+    doc["unit_of_measurement"] = (const char*)unit_of_measurement;
+  }
+  // topics
+  char availability_topic[MAX_TOPIC_SIZE];
+  valid &= availabilityTopic(availability_topic);
+  doc["avty_t"] = (const char*)availability_topic;
   char cmd_topic[MAX_TOPIC_SIZE];
   if (is_commandable) {
     valid &= commandTopic(cmd_topic);
@@ -124,7 +142,6 @@ bool HassMqttDevice::connect(PubSubClient& client, const char* username,
     Serial.println("name, cmd_topic or stat_topic invalid (max. 150chars)");
     return false;
   }
-  // publish to config topic
   char config_topic[MAX_TOPIC_SIZE];
   valid &= configTopic(config_topic);
   if (!valid) {
@@ -146,6 +163,36 @@ bool HassMqttDevice::connect(PubSubClient& client, const char* username,
     return false;
   }
   return true;
+}
+
+void HassMqttDevice::makeAvailable() {
+  char availability_topic[MAX_TOPIC_SIZE];
+  if (!availabilityTopic(availability_topic)) {
+    Serial.print("could not make device available: ");
+    Serial.println("availability topic is not valid (max. 150chars)");
+    return;
+  }
+  if (!client->publish(availability_topic, "online", true)) {
+    Serial.print("could not make device available: ");
+    Serial.print("either connection has been lost or message is too large");
+    return;
+  }
+  Serial.print("Succesfully made device available");
+}
+
+void HassMqttDevice::makeUnavailable() {
+  char availability_topic[MAX_TOPIC_SIZE];
+  if (!availabilityTopic(availability_topic)) {
+    Serial.print("could not make device unavailable: ");
+    Serial.println("availability topic is not valid (max. 150chars)");
+    return;
+  }
+  if (!client->publish(availability_topic, "offline", true)) {
+    Serial.print("could not make device unavailable: ");
+    Serial.print("either connection has been lost or message is too large");
+    return;
+  }
+  Serial.print("Succesfully made device unavailable");
 }
 
 void HassMqttDevice::remove() {
@@ -212,7 +259,11 @@ bool HassMqttDevice::subscribeCommands(CommandCallback callback) {
 }
 
 void HassMqttDevice::setComponent(const char* component) {
-  strncpy(this->component, component, MAX_COMPONENT_SIZE);
+  strncpy(this->component, component, MAX_CONFIG_VARIABLE_SIZE);
+}
+
+void HassMqttDevice::setIcon(const char* icon) {
+  strncpy(this->icon, icon, MAX_CONFIG_VARIABLE_SIZE);
 }
 
 void HassMqttDevice::setIsCommandable(bool is_commandable) {
@@ -220,13 +271,18 @@ void HassMqttDevice::setIsCommandable(bool is_commandable) {
 }
 
 void HassMqttDevice::setName(const char* name) {
-  strncpy(this->name, name, MAX_NAME_SIZE);
+  strncpy(this->name, name, MAX_CONFIG_VARIABLE_SIZE);
 }
 
 void HassMqttDevice::setNodeId(const char* node_id) {
-  strncpy(this->node_id, node_id, MAX_NODE_ID_SIZE);
+  strncpy(this->node_id, node_id, MAX_CONFIG_VARIABLE_SIZE);
 }
 
 void HassMqttDevice::setObjectId(const char* object_id) {
-  strncpy(this->object_id, object_id, MAX_OBJECT_ID_SIZE);
+  strncpy(this->object_id, object_id, MAX_CONFIG_VARIABLE_SIZE);
+}
+
+void HassMqttDevice::setUnitOfMeasurement(const char* unit_of_measurement) {
+  strncpy(this->unit_of_measurement, unit_of_measurement,
+          MAX_CONFIG_VARIABLE_SIZE);
 }

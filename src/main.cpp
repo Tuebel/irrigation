@@ -5,6 +5,15 @@
 #include <TaskScheduler.h>
 #include "device_config.h"
 
+/* The device_config.h defines the following secret constants:
+const char ssid[] = "My_Wifi_Router_SSID";
+const char wifi_password[] = "My_Wifi_Password";
+const char mqtt_server[] = "My_MQTT_Host";
+const uint16_t mqtt_port = 1883;
+const char mqtt_user[] = "my_mqtt_device";
+const char mqtt_password[] = "My_MQTT_Password";
+*/
+
 // hardware access
 const int RELAY_PIN = D1;
 const int MOISTURE_POWER_PIN = D2;
@@ -17,11 +26,14 @@ HassMqttDevice moisture, relay;
 Scheduler scheduler;
 void blink();
 Task blink_task(1e3, TASK_FOREVER, &blink, &scheduler);
+// restart delayed in setup
 void deep_sleep();
-// run once, restart delayed in setup
 Task deep_sleep_task(0, 1, &deep_sleep, &scheduler);
+// allow mqtt callbacks
 void loop_mqtt();
 Task loop_mqtt_task(100, TASK_FOREVER, &loop_mqtt, &scheduler);
+// moisture sensor is more reliable when the power is turned on a few seconds
+// before reading the adc
 void moisture_power_on();
 void moisture_measure();
 Task moisture_task(1e3, TASK_FOREVER, &moisture_power_on, &scheduler);
@@ -32,8 +44,10 @@ Task relay_off_task(1e3, 1, &relay_off, &scheduler);
 void blink() { digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN)); }
 
 void deep_sleep() {
+  relay.makeUnavailable();
+  loop_mqtt();
   Serial.println("Enter deep sleep");
-  ESP.deepSleep(600e6);
+  ESP.deepSleep(900e6);
 }
 
 void loop_mqtt() { mqtt_client.loop(); }
@@ -106,12 +120,15 @@ void setup() {
   delay(500);
   // setup moisture sensor
   moisture.setComponent("sensor");
+  moisture.setIcon("mdi:water-percent");
   moisture.setIsCommandable(false);
   moisture.setName("Feuchtigkeit Weihnachtsstern");
   moisture.setNodeId("esp8266_christmas_star");
   moisture.setObjectId("moisture_christmas_star");
+  moisture.setUnitOfMeasurement("Volt");
   // setup relay
   relay.setComponent("switch");
+  relay.setIcon("mdi:water-pump");
   relay.setIsCommandable(true);
   relay.setName("Pumpschalter");
   relay.setNodeId("esp8266_christmas_star");
@@ -127,10 +144,12 @@ void setup() {
     Serial.println("connecting moisture to home-assistant in 5 seconds");
     delay(5000);
   }
+  moisture.makeAvailable();
   while (!relay.connect(mqtt_client, mqtt_user, mqtt_password)) {
     Serial.println("connecting moisture to home-assistant in 5 seconds");
     delay(5000);
   }
+  relay.makeAvailable();
   relay.subscribeCommands(relay_callback);
   // run tasks
   blink_task.enable();
