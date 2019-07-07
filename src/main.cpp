@@ -18,6 +18,8 @@ const char mqtt_password[] = "My_MQTT_Password";
 const int RELAY_PIN = D1;
 const int MOISTURE_POWER_PIN = D2;
 const int ADC_PIN = A0;
+// deep sleep in microseconds
+const int DEEP_SLEEP_DURATION = 1800e6;
 // connection to home-assistant
 WiFiClient wifi_client;
 PubSubClient mqtt_client;
@@ -31,7 +33,7 @@ void deep_sleep();
 Task deep_sleep_task(0, 1, &deep_sleep, &scheduler);
 // allow mqtt callbacks
 void loop_mqtt();
-Task loop_mqtt_task(100, TASK_FOREVER, &loop_mqtt, &scheduler);
+Task loop_mqtt_task(50, TASK_FOREVER, &loop_mqtt, &scheduler);
 // moisture sensor is more reliable when the power is turned on a few seconds
 // before reading the adc
 void moisture_power_on();
@@ -47,27 +49,10 @@ void deep_sleep() {
   relay.makeUnavailable();
   loop_mqtt();
   Serial.println("Enter deep sleep");
-  ESP.deepSleep(900e6);
+  ESP.deepSleep(DEEP_SLEEP_DURATION);
 }
 
 void loop_mqtt() { mqtt_client.loop(); }
-
-void moisture_power_on() {
-  digitalWrite(MOISTURE_POWER_PIN, HIGH);
-  // measurement in 1sec
-  moisture_task.setCallback(&moisture_measure);
-  moisture_task.setInterval(1e3);
-}
-void moisture_measure() {
-  double moisture_volt = 3.3 * analogRead(ADC_PIN) / 1024;
-  char moisture_payload[4];
-  dtostrf(moisture_volt, 3, 2, moisture_payload);
-  moisture.publishState(moisture_payload);
-  digitalWrite(MOISTURE_POWER_PIN, LOW);
-  // restart measurement in 10secs
-  moisture_task.setCallback(&moisture_power_on);
-  moisture_task.setInterval(10e3);
-}
 
 void relay_off() {
   digitalWrite(RELAY_PIN, LOW);
@@ -80,6 +65,29 @@ void relay_on() {
   relay.publishState("ON");
   // for safety auto turn off after delay
   relay_off_task.restartDelayed(2000);
+}
+
+void moisture_power_on() {
+  digitalWrite(MOISTURE_POWER_PIN, HIGH);
+  // measurement in 1sec
+  moisture_task.setCallback(&moisture_measure);
+  moisture_task.setInterval(1e3);
+}
+
+void moisture_measure() {
+  // measure and publish
+  double moisture_volt = 3.3 * analogRead(ADC_PIN) / 1024;
+  char moisture_payload[4];
+  dtostrf(moisture_volt, 3, 2, moisture_payload);
+  moisture.publishState(moisture_payload);
+  digitalWrite(MOISTURE_POWER_PIN, LOW);
+  // automatic irrigation
+  if(moisture_volt < 1.0){
+    relay_on();
+  }
+  // restart measurement in 10secs
+  moisture_task.setCallback(&moisture_power_on);
+  moisture_task.setInterval(10e3);
 }
 
 void setup_connection() {

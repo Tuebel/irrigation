@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"name": "Irrigation",
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"*.yaml": "home-assistant",
+			"string_view": "cpp"
+		},
+		"terminal.integrated.env.linux": {
+			"PATH": "/home/tim/.platformio/penv/bin:/home/tim/.platformio/penv:/home/tim/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+			"PLATFORMIO_CALLER": "vscode"
+		},
+		"cSpell.enabled": false
+	}
+}
