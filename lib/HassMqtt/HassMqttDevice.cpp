@@ -90,9 +90,7 @@ bool HassMqttDevice::reconnect() {
   for (int i = 0; i < MAX_RECONNECT_TRIES; i++) {
     if (!client->connect(client_id, username, password)) {
       Serial.print("failed to connect mqtt, rc=");
-      Serial.print(client->state());
-      Serial.print("retry in 5 seconds");
-      delay(5000);
+      Serial.println(client->state());
     } else {
       break;
     }
@@ -174,10 +172,10 @@ void HassMqttDevice::makeAvailable() {
   }
   if (!client->publish(availability_topic, "online", true)) {
     Serial.print("could not make device available: ");
-    Serial.print("either connection has been lost or message is too large");
+    Serial.println("either connection has been lost or message is too large");
     return;
   }
-  Serial.print("Succesfully made device available");
+  Serial.println("Succesfully made device available");
 }
 
 void HassMqttDevice::makeUnavailable() {
@@ -189,10 +187,10 @@ void HassMqttDevice::makeUnavailable() {
   }
   if (!client->publish(availability_topic, "offline", true)) {
     Serial.print("could not make device unavailable: ");
-    Serial.print("either connection has been lost or message is too large");
+    Serial.println("either connection has been lost or message is too large");
     return;
   }
-  Serial.print("Succesfully made device unavailable");
+  Serial.println("Succesfully made device unavailable");
 }
 
 void HassMqttDevice::remove() {
@@ -212,20 +210,20 @@ void HassMqttDevice::remove() {
 
 // publish the given payload to the state topic
 bool HassMqttDevice::publishState(const char* state) {
-  if (!reconnect()) {
+  if (!client->connected()) {
     Serial.print("failed to publish state: ");
     Serial.println("MQTT client not connected");
     return false;
   }
   char state_topic[MAX_TOPIC_SIZE];
   if (!stateTopic(state_topic)) {
-    Serial.println("failed to publish state: ");
-    Serial.print("state topic is too long");
+    Serial.print("failed to publish state: ");
+    Serial.println("state topic is too long");
     return false;
   }
   if (!client->publish(state_topic, state, true)) {
-    Serial.println("failed to publish state: ");
-    Serial.print("either connection has been lost or message is too large");
+    Serial.print("failed to publish state: ");
+    Serial.println("either connection has been lost or message is too large");
     return false;
   }
   Serial.print("Sent new state: ");
