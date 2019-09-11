@@ -20,7 +20,7 @@ const int MOISTURE_POWER_PIN = D2;
 const int ADC_PIN = A0;
 // durations in milliseconds
 const int RELAY_ON_DURATION = 4e3;
-const int POWER_ON_DURATION = 30e3;
+const int POWER_ON_DURATION = 16e3;
 // connection to home-assistant
 WiFiClient wifi_client;
 PubSubClient mqtt_client;
@@ -52,7 +52,7 @@ void deep_sleep() {
   relay.makeUnavailable();
   loop_mqtt();
   Serial.println("Enter deep sleep");
-  ESP.deepSleepMax();
+  ESP.deepSleep(ESP.deepSleepMax());
 }
 
 void loop_mqtt() { mqtt_client.loop(); }
@@ -177,10 +177,9 @@ void setup() {
   }
   // run tasks
   blink_task.enable();
-  // deep sleep
-  deep_sleep_task.restartDelayed(POWER_ON_DURATION);
   loop_mqtt_task.enable();
   moisture_task.enable();
+  deep_sleep_task.restartDelayed(POWER_ON_DURATION);
   Serial.println("Device ready");
 }
 
