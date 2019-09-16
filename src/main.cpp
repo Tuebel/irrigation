@@ -18,9 +18,13 @@ const char mqtt_password[] = "My_MQTT_Password";
 const int RELAY_PIN = D1;
 const int MOISTURE_POWER_PIN = D2;
 const int ADC_PIN = A0;
-// durations in milliseconds
-const int RELAY_ON_DURATION = 4e3;
-const int POWER_ON_DURATION = 16e3;
+// durations and intervals in milliseconds
+const int BLINK_INTERVAL = 1 * TASK_SECOND;
+const int MQTT_LOOP_INTERVAL = 50 * TASK_MILLISECOND;
+const int RELAY_ON_DURATION = 3 * TASK_SECOND;
+const int MOISTURE_INTERVAL = 9 * TASK_SECOND;
+const int MOISTURE_ON_DURATION = 1 * TASK_SECOND;
+const int POWER_ON_DURATION = 22 * TASK_SECOND;
 // connection to home-assistant
 WiFiClient wifi_client;
 PubSubClient mqtt_client;
@@ -28,27 +32,31 @@ HassMqttDevice moisture, relay;
 // task scheduling
 Scheduler scheduler;
 void blink();
-Task blink_task(2e3, TASK_FOREVER, &blink, &scheduler);
+Task blink_task(BLINK_INTERVAL, TASK_FOREVER, &blink, &scheduler);
 // restart delayed in setup
 void deep_sleep();
-Task deep_sleep_task(0, 1, &deep_sleep, &scheduler);
+Task deep_sleep_task(TASK_IMMEDIATE, TASK_ONCE, &deep_sleep, &scheduler);
 // allow mqtt callbacks
 void loop_mqtt();
-Task loop_mqtt_task(50, TASK_FOREVER, &loop_mqtt, &scheduler);
+Task loop_mqtt_task(MQTT_LOOP_INTERVAL, TASK_FOREVER, &loop_mqtt, &scheduler);
 // moisture sensor is more reliable when the power is turned on a few seconds
 // before reading the adc
 void moisture_power_on();
+Task moisture_start_task(MOISTURE_INTERVAL, TASK_FOREVER, &moisture_power_on,
+                         &scheduler);
 void moisture_measure();
-Task moisture_task(1e3, TASK_FOREVER, &moisture_power_on, &scheduler);
+Task moisture_end_task(TASK_IMMEDIATE, TASK_ONCE, &moisture_measure,
+                       &scheduler);
 void relay_off();
-// run once, restart delayed after every relay on
-Task relay_off_task(1e3, 1, &relay_off, &scheduler);
+Task relay_off_task(TASK_IMMEDIATE, TASK_ONCE, &relay_off, &scheduler);
 
 void blink() { digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN)); }
 
 bool wifi_connected() { return WiFi.status() == WL_CONNECTED; }
 
 void deep_sleep() {
+  relay_off();
+  moisture.makeUnavailable();
   relay.makeUnavailable();
   loop_mqtt();
   Serial.println("Enter deep sleep");
@@ -77,8 +85,7 @@ void moisture_power_on() {
   digitalWrite(MOISTURE_POWER_PIN, HIGH);
   Serial.println("Moisture power ON");
   // measurement in 1sec
-  moisture_task.setCallback(&moisture_measure);
-  moisture_task.setInterval(1e3);
+  moisture_end_task.restartDelayed(MOISTURE_ON_DURATION);
 }
 
 void moisture_measure() {
@@ -96,9 +103,6 @@ void moisture_measure() {
   if (moisture_volt < 1.0) {
     relay_on();
   }
-  // restart measurement in 10secs
-  moisture_task.setCallback(&moisture_power_on);
-  moisture_task.setInterval(10e3);
 }
 
 void setup_connection() {
@@ -178,7 +182,7 @@ void setup() {
   // run tasks
   blink_task.enable();
   loop_mqtt_task.enable();
-  moisture_task.enable();
+  moisture_start_task.enable();
   deep_sleep_task.restartDelayed(POWER_ON_DURATION);
   Serial.println("Device ready");
 }

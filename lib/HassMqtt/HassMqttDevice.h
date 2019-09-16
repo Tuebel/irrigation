@@ -10,7 +10,7 @@ class HassMqttDevice {
   /** Size of the mqtt device configuration variable char arrayd */
   const static int MAX_CONFIG_VARIABLE_SIZE = 50;
   /** Number of tries to reconnect to the mqtt server */
-  const static int MAX_RECONNECT_TRIES = 3;
+  const static int MAX_RECONNECT_TRIES = 2;
   /** callback for commands
    * \param payload of the MQTT message */
   using CommandCallback = std::function<void(char*)>;
