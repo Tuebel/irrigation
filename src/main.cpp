@@ -25,6 +25,7 @@ const int RELAY_ON_DURATION = 3 * TASK_SECOND;
 const int MOISTURE_INTERVAL = 9 * TASK_SECOND;
 const int MOISTURE_ON_DURATION = 1 * TASK_SECOND;
 const int POWER_ON_DURATION = 22 * TASK_SECOND;
+const uint64_t DEEP_SLEEP_DURATION = 60 * 60e6;
 // connection to home-assistant
 WiFiClient wifi_client;
 PubSubClient mqtt_client;
@@ -60,7 +61,7 @@ void deep_sleep() {
   relay.makeUnavailable();
   loop_mqtt();
   Serial.println("Enter deep sleep");
-  ESP.deepSleep(ESP.deepSleepMax());
+  ESP.deepSleep(DEEP_SLEEP_DURATION);
 }
 
 void loop_mqtt() { mqtt_client.loop(); }
